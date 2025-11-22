@@ -1,0 +1,67 @@
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+
+lint:
+  stage: lint
+  image: python:3.11
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - echo "Running code linting..."
+    - flake8 app.py --max-line-length=120
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+
+test:
+  stage: test
+  image: python:3.11
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - echo "Running tests with coverage..."
+    - pytest --cov=app --cov-report=term --cov-report=html --cov-report=xml --junitxml=report.xml
+    - echo "Checking coverage threshold..."
+    - coverage report --fail-under=50
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    when: always
+    paths:
+      - htmlcov/
+      - coverage.xml
+      - report.xml
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 30 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+
+build:
+  stage: build
+  image: python:3.11
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - echo "Building application..."
+    - echo "Project built successfully at $(date)"
+    - python -m py_compile app.py
+    - echo "Build completed for branch $CI_COMMIT_BRANCH"
+  artifacts:
+    paths:
+      - __pycache__/
+    expire_in: 1 week
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  only:
+    - main
